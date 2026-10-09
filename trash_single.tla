@@ -108,19 +108,20 @@ CapacityNotExceeded == ~CapacityExceeded
 \* Replace FALSE by your own formalisation of each property.
 
 \* The outer door can only be locked if it is closed.
-OuterDoorLocked == FALSE
+OuterDoorLocked == \A b \in Bins : outerDoorLocked[b] => ~outerDoorOpen[b]
 \* The vertical ram is only used when the outer door is closed and locked.
-RamOuterDoor == FALSE
+RamOuterDoor == \A b \in Bins : ramExtended[b] => (outerDoorLocked[b] /\ ~outerDoorOpen[b]) 
 \* Every time the trash bin is full, it is eventually not full anymore.
-TrashEmptied == FALSE
+TrashEmptied ==  \A b \in Bins : [] (CapacityExceeded[b] => <> ~CapacityExceeded[b])
 \* An unauthorized user cannot open the outer door.
-AuthorizedOpenOnly == FALSE
+AuthorizedOpenOnly == \A b \in Bins : outerDoorOpen[b] => authorized[b]
+\*  or : ~(perm[b].granted /\ outerDoorOpen[b])
 \* The user infinitely often has trash and infinitely often has no trash.
-UserTrash == FALSE
+UserTrash ==   \A u \in Users : []<> ((userTrash[u] > 0) /\ []<> (userTrash[u] = 0))
 \* Every time the user has trash, they can deposit their trash.
-UserTrashDeposited == FALSE
+UserTrashDeposited == \A u \in Users : [] ((userTrash[u] > 0) => <> (userTrash[u] = 0))
 \* Every time the truck is requested for the trash bin, the truck has eventually emptied the bin.
-TruckEmpties == FALSE
+TruckEmpties == \A b \in Bins : [] ((truckCommand[b].command = "request") => <> (truckCommand[b].command = "emptied"))
 
 end define;
 
@@ -297,49 +298,65 @@ end process;
 \*****************************
 \* Process for the controller
 \*****************************
-\* DUMMY main control process type.
-\* Remodel it to control the trash bin system and handle requests by users!
 process controlProcess = Control
+variables
+  scan = [user |-> 0, bin |-> 0]
+  permission = [user |-> 0, bin |-> 1, granted |-> FALSE]
 begin
   ControlStart:
-    while TRUE do
-    ServerAwaitRequest:
-      if Len(scans) > 0 /\  ~CapacityExceeded then 
-           write(serverRequests, [user |-> scans[1].user]);
-           scans := Tail(scans);
-           
-           ServerAwaitResponse:
-            await Len(serverResponse) > 0;
-            write(permissions, [user |-> Head(serverResponses).user, bin |-> 1, granted |-> Head(serverResponses).permission]);
-            serverResponses := Tail(serverResponses);
-           
-           LockOuterDoor:
-            await ~outerDoorOpen;
-            binCommand.command := "change_outer_lock";
-           
-           OpenTrapDoor:
-            await ~outerDoorLocked;
-            binCommand.command := "change_trap_door";
-           
-           CloseTrapDoor:
-            await trapDoorOpen;
-            binCommand.command := "change_trap_door";
-           
-           CompresTrash:
-            await ~trapDoorOpen;
-            binCommand.command := "change_ram";
-           CloseRam:
-            await ramExtended;
-            binCommand.command := "change_ram";
+   while TRUE do
+  
+     if truckCommand.command # "emptied" then 
+        NoPermission:
+            read(scans,scan);
+            write(permissions, [user |-> scan.user, bin |-> 1, granted |-> FALSE]);
             
-           CheckFull:
-            if CapacityExceeded then 
-             truckCommand.command:= "request"
-       else if Len(scans) > 0 /\  CapacityExceeded then 
-            write(permissions,[user |-> Head(scans).user, bin |-> 1, granted |-> FALSE]);
-            scans := Tail(scans);
+     else 
+        ServerAwaitRequest:
+           read(scans,scan);
+           write(serverRequests, [user |-> scan.user]);
+           
+        ServerAwaitResponse:
+           read(serverResponses, permission);
+           if permission.granted then
+             UnlockDoor:
+                binCommand := [command |-> "change_outer_lock", open |-> TRUE];
+             AwaitUnlockDoor:
+                await binCommand.command = "finished";
+             GivePermission:
+                write(permissions, [user |-> permission.user, bin |-> 1, granted |-> permission.granted]);
+                await outerDoorOpen;
+             LockOuterDoor:
+                await ~outerDoorOpen /\ binCommand.command = "finished";
+                binCommand := [command |-> "change_outer_lock", open |-> FALSE];
+             AwaitLockDoor:
+                await binCommand.command = "finished";
+             OpenTrapDoor:
+                binCommand := [command |-> "change_trap_door", open |-> TRUE];
+             AwaitOpenTrapDoor:
+                await binCommand.command = "finished";
+             CloseTrapDoor:
+                binCommand := [command |-> "change_trap_door", open |-> FALSE];
+             AwaitCloseTrapDoor:
+                await binCommand.command = "finished";
+             ExtendRam:
+                binCommand := [command |-> "change_ram", open |-> TRUE];
+             AwaitExtendRam:
+                await binCommand.command = "finished";
+             UnExtendRam:
+                binCommand := [command |-> "change_ram", open |-> FALSE];
+             AwaitUnExtendRam:
+                await binCommand.command = "finished";
+                
+             CheckFull:
+                 if Trash >= trashCapacity * 0.8 then 
+                   truckCommand.command:= "request" 
+           else 
+                write(permissions, [user |-> permission.user, bin |-> 1, granted |-> FALSE]);
+           end if;
       end if;
 end process;
+
 
 end algorithm; *)
 \* BEGIN TRANSLATION (chksum(pcal) = "7e8eea08" /\ chksum(tla) = "e114d750")
