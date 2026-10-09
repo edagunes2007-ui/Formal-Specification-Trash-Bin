@@ -276,22 +276,19 @@ process truckProcess \in Trucks
 begin
   TruckStart:
   while TRUE do:
-    await truckCommand.command = "request";
-    truckCommand.command := "arrived";
+    await truckCommand.command = "request";\
     assert truckCommand.bin = 1;
-
-
-
-    binCommand := [command |-> "empty", open |-> FALSE];
+    truckCommand.command := "arrived";
     
-    TruckWaitForEmpty:
-    truckCommand.command := "start_emptying";
+    TruckSendEmpty:
     await binCommand.command = "finished";
-
+    binCommand := [command |-> "empty", open |-> FALSE];
+    truckCommand.command := "start_emptying";
+    
+    TruckStartEmptying
+    await binCommand.command = "finished";
     truckCommand := [command |-> "emptied", bin |-> 1];
-    
-    
-    skip;
+  end while;
 end process;
 
 
