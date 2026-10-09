@@ -276,20 +276,22 @@ begin
   TruckStart:
   while TRUE do:
     await truckCommand.command = "request";
+    truckCommand.command := "arrived";
     assert truckCommand.bin = 1;
 
-  
-    await outerDoorLocked
-       /\ ~trapDoorOpen
-       /\ ~ramExtended
-       /\ trashInTop = 0
-       /\ trashUncompressed = 0;
 
 
     binCommand := [command |-> "empty", open |-> FALSE];
+    
+    TruckWaitForEmpty:
+    truckCommand.command := "start_emptying";
+    await binCommand.command = "finished";
+
+    truckCommand := [command |-> "emptied", bin |-> 1];
+    
+    
     skip;
 end process;
-
 
 
 \*****************************
