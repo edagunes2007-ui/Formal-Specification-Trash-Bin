@@ -300,10 +300,44 @@ end process;
 process controlProcess = Control
 begin
   ControlStart:
-    \* Implement behaviour
-    skip;
+    while TRUE do
+    ServerAwaitRequest:
+      if Len(scans) > 0 /\  ~CapacityExceeded then 
+           write(serverRequests, [user |-> scans[1].user]);
+           scans := Tail(scans);
+           
+           ServerAwaitResponse:
+            await Len(serverResponse) > 0;
+            write(permissions, [user |-> Head(serverResponses).user, bin |-> 1, granted |-> Head(serverResponses).permission]);
+            serverResponses := Tail(serverResponses);
+           
+           LockOuterDoor:
+            await ~outerDoorOpen;
+            binCommand.command := "change_outer_lock";
+           
+           OpenTrapDoor:
+            await ~outerDoorLocked;
+            binCommand.command := "change_trap_door";
+           
+           CloseTrapDoor:
+            await trapDoorOpen;
+            binCommand.command := "change_trap_door";
+           
+           CompresTrash:
+            await ~trapDoorOpen;
+            binCommand.command := "change_ram";
+           CloseRam:
+            await ramExtended;
+            binCommand.command := "change_ram";
+            
+           CheckFull:
+            if CapacityExceeded then 
+             truckCommand.command:= "request"
+       else if Len(scans) > 0 /\  CapacityExceeded then 
+            write(permissions,[user |-> Head(scans).user, bin |-> 1, granted |-> FALSE]);
+            scans := Tail(scans);
+      end if;
 end process;
-
 
 end algorithm; *)
 \* BEGIN TRANSLATION (chksum(pcal) = "7e8eea08" /\ chksum(tla) = "e114d750")
