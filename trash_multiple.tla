@@ -284,11 +284,23 @@ end process;
 \*****************************
 \* DUMMY truck process type.
 \* Remodel it to react to requests and empty the requested trash bin!
-process truckProcess \in Trucks
+fair process truckProcess \in Trucks
+variables tb = 1
 begin
   TruckStart:
-    \* Implement behaviour
-    skip;
+    while TRUE do
+  TruckAwaitRequest:
+      await truckCommand[self].command = "request";
+      tb := truckCommand[self].bin;
+      truckCommand[self].command := "arrived";
+  TruckSendEmpty:
+      await binCommand[tb].command = "finished";
+      binCommand[tb] := [command |-> "empty", open |-> FALSE];
+      truckCommand[self].command := "start_emptying";
+  TruckAwaitEmptied:
+      await binCommand[tb].command = "finished";
+      truckCommand[self] := [command |-> "emptied", bin |-> tb];
+    end while;
 end process;
 
 
