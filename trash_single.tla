@@ -275,8 +275,8 @@ end process;
 process truckProcess \in Trucks
 begin
   TruckStart:
-  while TRUE do:
-    await truckCommand.command = "request";\
+  while TRUE do
+    await truckCommand.command = "request";
     assert truckCommand.bin = 1;
     truckCommand.command := "arrived";
     
@@ -285,11 +285,12 @@ begin
     binCommand := [command |-> "empty", open |-> FALSE];
     truckCommand.command := "start_emptying";
     
-    TruckStartEmptying
+    TruckStartEmptying:
     await binCommand.command = "finished";
     truckCommand := [command |-> "emptied", bin |-> 1];
   end while;
 end process;
+
 
 
 \*****************************
